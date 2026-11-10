@@ -1,151 +1,124 @@
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+import numpy as np
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+st.set_page_config(page_title="Core-Shell Calculator", layout="centered")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+st.title("🔬 Analizzatore Tetraedro Troncato Core-Shell")
+st.write("Modello geometrico basato su $V = 0.618 \\cdot h^3$ (Modello di Jordi).")
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+# Database materiali
+materials_data = {
+    'InAs': {'cell_vol_nm3': 0.22123, 'anion': 'As'},
+    'ZnSe': {'cell_vol_nm3': 0.18300, 'ml_thickness_nm': 0.401, 'anion': 'Se'},
+    'ZnTe': {'cell_vol_nm3': 0.22765, 'ml_thickness_nm': 0.432, 'anion': 'Te'},
+    'ZnS': {'cell_vol_nm3': 0.16046, 'ml_thickness_nm': 0.384, 'anion': 'S'},
+    'InP': {'cell_vol_nm3': 0.20216, 'ml_thickness_nm': 0.415, 'anion': 'P'}
+}
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+# Definizione dei sistemi
+systems = {
+    "InAs@ZnSe": {"type": "single", "shell": 'ZnSe'},
+    "InAs@ZnS": {"type": "single", "shell": 'ZnS'},
+    "InAs@ZnTe": {"type": "single", "shell": 'ZnTe'},
+    "InAs@InP": {"type": "single", "shell": 'InP'},
+    "InAs@ZnTe@ZnSe": {"type": "multi", "shell1": 'ZnTe', "shell2": 'ZnSe'},
+    "InAs@ZnSe@ZnS": {"type": "multi", "shell1": 'ZnSe', "shell2": 'ZnS'},
+    "InAs@InP@ZnSe": {"type": "multi", "shell1": 'InP', "shell2": 'ZnSe'}
+}
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+system_choice = st.selectbox("Seleziona il tipo di cristallo:", list(systems.keys()))
+core_h = st.number_input("Altezza del core di InAs (nm):", min_value=0.5, max_value=20.0, value=3.0, step=0.1)
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+# Calcolo volume core con il fattore esatto 0.618
+vol_core = 0.618 * (core_h ** 3)
+as_atoms = (vol_core / materials_data['InAs']['cell_vol_nm3']) * 4.0
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+st.markdown("---")
+st.subheader("📊 Dati Core InAs")
+col1, col2 = st.columns(2)
+col1.metric("Volume Core", f"{vol_core:.3f} nm³")
+col2.metric("Atomi di As (e In)", f"{as_atoms:.1f}")
+st.markdown("---")
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+sys_info = systems[system_choice]
 
-    return gdp_df
+# CASO 1: Single Shell (es. InAs@ZnSe)
+if sys_info["type"] == "single":
+    shell_mat = sys_info["shell"]
+    info = materials_data[shell_mat]
+    ml_thick = info['ml_thickness_nm']
+    cell_vol = info['cell_vol_nm3']
+    anion = info['anion']
+    
+    st.subheader(f"Analisi Monolayer Shell ({shell_mat}, fino a 10 ML)")
+    
+    table_data = []
+    for ml in range(1, 11):
+        total_h_ml = core_h + (2 * ml * ml_thick)
+        total_vol_ml = 0.618 * (total_h_ml ** 3)
+        exact_shell_vol = total_vol_ml - vol_core
+        anion_atoms = (exact_shell_vol / cell_vol) * 4.0
+        ratio = anion_atoms / as_atoms
+        
+        table_data.append({
+            "ML": ml,
+            "Altezza NC (nm)": round(total_h_ml, 3),
+            "Vol. Shell (nm³)": round(exact_shell_vol, 3),
+            f"Atomi {anion}": round(anion_atoms, 1),
+            f"Rapporto {anion}/As": round(ratio, 3)
+        })
+    
+    st.table(table_data)
 
-gdp_df = get_gdp_data()
-
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+# CASO 2: Multi Shell (es. InAs@ZnSe@ZnS o InAs@ZnTe@ZnSe)
+elif sys_info["type"] == "multi":
+    shell1_mat = sys_info["shell1"]
+    shell2_mat = sys_info["shell2"]
+    
+    info1 = materials_data[shell1_mat]
+    info2 = materials_data[shell2_mat]
+    
+    st.subheader(f"1° Strato Shell: {shell1_mat} (fino a 10 ML)")
+    
+    table_data_1 = []
+    for ml1 in range(1, 11):
+        h1 = core_h + (2 * ml1 * info1['ml_thickness_nm'])
+        v1 = 0.618 * (h1 ** 3) - vol_core
+        atoms1 = (v1 / info1['cell_vol_nm3']) * 4.0
+        ratio1 = atoms1 / as_atoms
+        
+        table_data_1.append({
+            "ML 1° Shell": ml1,
+            "Altezza NC (nm)": round(h1, 3),
+            "Vol. 1° Shell (nm³)": round(v1, 3),
+            f"Atomi {info1['anion']}": round(atoms1, 1),
+            f"Rapporto {info1['anion']}/As": round(ratio1, 3)
+        })
+    st.table(table_data_1)
+    
+    st.markdown("---")
+    # Cursore esteso fino a 10 monolayer per il primo strato
+    ml1_fixed = st.slider(f"Seleziona i ML fissi del 1° strato ({shell1_mat}) per calcolare il 2° strato:", min_value=1, max_value=10, value=2)
+    
+    # Altezza e volume dopo il 1° strato fissato
+    h_after_1 = core_h + (2 * ml1_fixed * info1['ml_thickness_nm'])
+    vol_after_1 = 0.618 * (h_after_1 ** 3)
+    
+    st.subheader(f"2° Strato Shell: {shell2_mat} (con {ml1_fixed} ML di {shell1_mat}, fino a 5 ML)")
+    
+    table_data_2 = []
+    for ml2 in range(1, 6):
+        h2 = h_after_1 + (2 * ml2 * info2['ml_thickness_nm'])
+        v_total = 0.618 * (h2 ** 3)
+        v_shell2 = v_total - vol_after_1
+        atoms2 = (v_shell2 / info2['cell_vol_nm3']) * 4.0
+        ratio2 = atoms2 / as_atoms
+        
+        table_data_2.append({
+            "ML 2° Shell": ml2,
+            "Altezza Tot (nm)": round(h2, 3),
+            "Vol. 2° Shell (nm³)": round(v_shell2, 3),
+            f"Atomi {info2['anion']} (2° Shell)": round(atoms2, 1),
+            f"Rapporto {info2['anion']}/As": round(ratio2, 3)
+        })
+    st.table(table_data_2)
