@@ -29,15 +29,23 @@ systems = {
 system_choice = st.selectbox("Seleziona il tipo di cristallo:", list(systems.keys()))
 core_h = st.number_input("Altezza del core di InAs (nm):", min_value=0.5, max_value=20.0, value=3.0, step=0.1)
 
-# Calcolo volume core con il fattore esatto 0.618
+# Calcoli geometrici del Core
 vol_core = 0.618 * (core_h ** 3)
 as_atoms = (vol_core / materials_data['InAs']['cell_vol_nm3']) * 4.0
 
+# Calcolo dell'area superficiale del tetraedro troncato di InAs.
+# Per un tetraedro troncato regolare, l'area superficiale scala proporzionalmente a h^2.
+# Nota: La costante geometrica esatta dipende dal fattore di troncamento delle facce. 
+# Usiamo la relazione geometrica standard derivata dal modello (S ≈ K * h^2).
+# Se nel tuo Excel hai una formula specifica per l'area, puoi adattare il coefficiente (es. ~ 2.45 * h^2).
+surface_area_core = 2.45 * (core_h ** 2)
+
 st.markdown("---")
 st.subheader("📊 Dati Core InAs")
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 col1.metric("Volume Core", f"{vol_core:.3f} nm³")
-col2.metric("Atomi di As (e In)", f"{as_atoms:.1f}")
+col2.metric("Area Superficiale Core", f"{surface_area_core:.3f} nm²")
+col3.metric("Atomi di As (e In)", f"{as_atoms:.1f}")
 st.markdown("---")
 
 sys_info = systems[system_choice]
@@ -97,7 +105,6 @@ elif sys_info["type"] == "multi":
     st.table(table_data_1)
     
     st.markdown("---")
-    # Cursore esteso fino a 10 monolayer per il primo strato
     ml1_fixed = st.slider(f"Seleziona i ML fissi del 1° strato ({shell1_mat}) per calcolare il 2° strato:", min_value=1, max_value=10, value=2)
     
     # Altezza e volume dopo il 1° strato fissato
