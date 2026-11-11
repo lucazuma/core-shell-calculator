@@ -4,7 +4,7 @@ import numpy as np
 st.set_page_config(page_title="Core-Shell Calculator", layout="centered")
 
 st.title("🔬 Analizzatore Tetraedro Troncato Core-Shell")
-st.write("Modello geometrico basato su $V = 0.618 \\cdot h^3$ (Modello di Jordi).")
+st.write("Modello geometrico basato su $V = 0.618 \\cdot h^3$ e $S = 2.45 \\cdot h^2$ (Modello di Jordi).")
 
 # Database materiali
 materials_data = {
@@ -32,12 +32,6 @@ core_h = st.number_input("Altezza del core di InAs (nm):", min_value=0.5, max_va
 # Calcoli geometrici del Core
 vol_core = 0.618 * (core_h ** 3)
 as_atoms = (vol_core / materials_data['InAs']['cell_vol_nm3']) * 4.0
-
-# Calcolo dell'area superficiale del tetraedro troncato di InAs.
-# Per un tetraedro troncato regolare, l'area superficiale scala proporzionalmente a h^2.
-# Nota: La costante geometrica esatta dipende dal fattore di troncamento delle facce. 
-# Usiamo la relazione geometrica standard derivata dal modello (S ≈ K * h^2).
-# Se nel tuo Excel hai una formula specifica per l'area, puoi adattare il coefficiente (es. ~ 2.45 * h^2).
 surface_area_core = 2.45 * (core_h ** 2)
 
 st.markdown("---")
@@ -65,6 +59,7 @@ if sys_info["type"] == "single":
         total_h_ml = core_h + (2 * ml * ml_thick)
         total_vol_ml = 0.618 * (total_h_ml ** 3)
         exact_shell_vol = total_vol_ml - vol_core
+        total_surface_ml = 2.45 * (total_h_ml ** 2)
         anion_atoms = (exact_shell_vol / cell_vol) * 4.0
         ratio = anion_atoms / as_atoms
         
@@ -72,6 +67,7 @@ if sys_info["type"] == "single":
             "ML": ml,
             "Altezza NC (nm)": round(total_h_ml, 3),
             "Vol. Shell (nm³)": round(exact_shell_vol, 3),
+            "Area Totale (nm²)": round(total_surface_ml, 3),
             f"Atomi {anion}": round(anion_atoms, 1),
             f"Rapporto {anion}/As": round(ratio, 3)
         })
@@ -92,6 +88,7 @@ elif sys_info["type"] == "multi":
     for ml1 in range(1, 11):
         h1 = core_h + (2 * ml1 * info1['ml_thickness_nm'])
         v1 = 0.618 * (h1 ** 3) - vol_core
+        s1 = 2.45 * (h1 ** 2)
         atoms1 = (v1 / info1['cell_vol_nm3']) * 4.0
         ratio1 = atoms1 / as_atoms
         
@@ -99,6 +96,7 @@ elif sys_info["type"] == "multi":
             "ML 1° Shell": ml1,
             "Altezza NC (nm)": round(h1, 3),
             "Vol. 1° Shell (nm³)": round(v1, 3),
+            "Area Totale (nm²)": round(s1, 3),
             f"Atomi {info1['anion']}": round(atoms1, 1),
             f"Rapporto {info1['anion']}/As": round(ratio1, 3)
         })
@@ -118,6 +116,7 @@ elif sys_info["type"] == "multi":
         h2 = h_after_1 + (2 * ml2 * info2['ml_thickness_nm'])
         v_total = 0.618 * (h2 ** 3)
         v_shell2 = v_total - vol_after_1
+        s2 = 2.45 * (h2 ** 2)
         atoms2 = (v_shell2 / info2['cell_vol_nm3']) * 4.0
         ratio2 = atoms2 / as_atoms
         
@@ -125,6 +124,7 @@ elif sys_info["type"] == "multi":
             "ML 2° Shell": ml2,
             "Altezza Tot (nm)": round(h2, 3),
             "Vol. 2° Shell (nm³)": round(v_shell2, 3),
+            "Area Totale (nm²)": round(s2, 3),
             f"Atomi {info2['anion']} (2° Shell)": round(atoms2, 1),
             f"Rapporto {info2['anion']}/As": round(ratio2, 3)
         })
